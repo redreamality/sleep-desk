@@ -72,13 +72,14 @@ class NightAudioEngineImpl(
             }
         }
         val processor = SoundEventProcessor(
-            config, { YamNetSoundModel(appContext) },
-            { event, audio ->
+            config,
+            writeClip = { event, audio ->
                 clipStore.encodeAac(
                     sessionId, NightEventType.UNKNOWN, audio.clipPcm, config.sampleRate,
                     config.aacBitrate, event.startMs, event.id
                 )?.second
-            }, ::publish
+            }, publish = ::publish,
+            classifierFactory = { SpectralSnoreClassifier() }
         )
         val analysis = BackgroundAudioQueue(
             config.maxAnalysisQueue, processor::process, processor::cancel, processor::close

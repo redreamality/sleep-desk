@@ -61,10 +61,13 @@ jobs:
         run: |
           # With upload secrets, debug + release buildTypes both use the upload key
           # (see app/build.gradle.kts). Keep assembleDebug so auto-release paths stay stable.
-          ./gradlew testDebugUnitTest assembleDebug --no-daemon
+          ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon
           if [ "${HAS_UPLOAD_KEYSTORE}" = "true" ]; then
             ./gradlew assembleRelease --no-daemon
           fi
+
+      - name: Verify lightweight APK packaging
+        run: uv run --python 3.12 python tools/verify_spectral_apk.py app/build/outputs/apk/debug/app-debug.apk
 
       - name: Rename APK with short SHA
         run: |

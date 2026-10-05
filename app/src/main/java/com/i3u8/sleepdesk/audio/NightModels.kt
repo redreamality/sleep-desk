@@ -10,7 +10,7 @@ enum class ClassificationStatus { LEGACY, PENDING, SUGGESTED, UNCERTAIN, FAILED 
 enum class ClipStatus { LEGACY, PENDING, SAVED, QUOTA_REACHED, DISABLED, FAILED }
 
 object AudioPipelineVersion {
-    const val CURRENT = "audio-v2.0"
+    const val CURRENT = "audio-v2.1-spectral"
     const val PREPROCESSING = "pcm16-16k-fixed-gain-v1"
 }
 

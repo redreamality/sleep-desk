@@ -36,11 +36,11 @@ class FullAudioPipelineTest {
             store.appendNightEvent(event.copy(sessionId = session.id))
         }
         val clipStore = AudioClipStore(context)
-        val processor = SoundEventProcessor(config, { YamNetSoundModel(context) },
-            { event, audio ->
+        val processor = SoundEventProcessor(config,
+            writeClip = { event, audio ->
                 clipStore.encodeAac(session.id, NightEventType.UNKNOWN, audio.clipPcm,
                     16000, config.aacBitrate, event.startMs, event.id)?.second
-            }, ::publish)
+            }, publish = ::publish, classifierFactory = { SpectralSnoreClassifier() })
         val queue = BackgroundAudioQueue(8, processor::process, processor::cancel, processor::close)
         val pipeline = EventDetectionPipeline(config, session.startMs, ::publish) { event, audio ->
             queue.submit(event, audio)
@@ -79,7 +79,7 @@ class FullAudioPipelineTest {
         assertEquals(1, observed.map { it.id }.toSet().size)
         assertEquals(2000f, result.features.getValue("candidateOffsetMs"), 1f)
         assertFalse(result.features.containsKey("context.POST_ROLL_SHORT"))
-        assertTrue(result.modelVersion!!.startsWith("yamnet-"))
+        assertEquals(SpectralSnoreClassifier.VERSION, result.modelVersion)
         val file = clipStore.fileForRelative(result.clipRelativePath!!)
         val retriever = MediaMetadataRetriever()
         try {

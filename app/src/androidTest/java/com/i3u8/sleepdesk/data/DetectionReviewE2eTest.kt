@@ -32,6 +32,7 @@ import com.i3u8.sleepdesk.audio.NightEventType
 import com.i3u8.sleepdesk.ui.EventDetailBottomSheet
 import com.i3u8.sleepdesk.ui.EventsAdapter
 import com.i3u8.sleepdesk.ui.SegmentsAdapter
+import com.i3u8.sleepdesk.ui.SegmentDetailBottomSheet
 import com.i3u8.sleepdesk.ui.NightTimelineHeuristics
 import org.hamcrest.Matchers.*
 import org.json.JSONObject
@@ -151,6 +152,77 @@ class DetectionReviewE2eTest {
         bindRows()
         onView(withId(R.id.tvEventType)).check(matches(withText(R.string.event_breathing)))
         onView(withId(R.id.tvEventMeta)).check(matches(withText(containsString("模型建议"))))
+    }
+
+    @Test fun recognizedSnoreSurvivesUnknownNeighborsAndOldSegmentsThroughPlaybackAndExport() {
+        val session = store.startNew()
+        val clip = wav(session.id)
+        repeat(11) { i ->
+            store.appendNightEvent(candidate(session, "event-$i").copy(
+                startMs = session.startMs + i * 1000L,
+                endMs = session.startMs + i * 1000L + 500,
+                type = if (i == 5) NightEventType.SNORE else NightEventType.UNKNOWN,
+                classificationStatus = if (i == 5) ClassificationStatus.SUGGESTED
+                    else ClassificationStatus.UNCERTAIN,
+                clipStatus = if (i == 5) ClipStatus.SAVED else ClipStatus.DISABLED,
+                clipRelativePath = if (i == 5) clip else null,
+                revision = 2
+            ), session.id)
+        }
+        // Persist the old all-unknown index to exercise the upgrade path, not just new nights.
+        val root = JSONObject(store.sessionsFile().readText())
+        root.getJSONObject("current").put("segments", org.json.JSONArray().put(JSONObject()
+            .put("id", "${session.id}_seg_0").put("sessionId", session.id)
+            .put("startMs", session.startMs).put("endMs", session.startMs + 11000)
+            .put("primaryLabel", "UNKNOWN").put("segmentVersion", "seg-v3")
+            .put("eventIds", org.json.JSONArray((0..10).map { "event-$it" }))))
+        store.sessionsFile().writeText(root.toString())
+        SessionStore.invalidateCache()
+        val rebuilt = store.ensureSegmentsPersisted(session.id)!!
+        val snore = rebuilt.ensureSegments().single { it.primaryLabel == "SNORE" }
+        assertEquals(listOf("event-5"), snore.eventIds)
+        assertEquals(listOf(clip), snore.representativeClipPaths)
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        scenario!!.onActivity { activity ->
+            activity.setContentView(RecyclerView(activity).apply {
+                layoutManager = LinearLayoutManager(activity)
+                adapter = SegmentsAdapter(rebuilt.ensureSegments()) { segment ->
+                    SegmentDetailBottomSheet.newInstance(session.id, segment.id)
+                        .show(activity.supportFragmentManager, SegmentDetailBottomSheet.TAG)
+                }
+            })
+        }
+        onView(allOf(withId(R.id.tvSegLabel), withText(R.string.segment_snore)))
+            .check(matches(isDisplayed())).perform(click())
+        detailOpen = true
+        onView(isRoot()).perform(object : ViewAction {
+            override fun getConstraints(): Matcher<View> = isRoot()
+            override fun getDescription() = "Wait for recognized segment and playable clip"
+            override fun perform(uiController: UiController, view: View) {
+                repeat(60) {
+                    if (view.findViewById<android.widget.LinearLayout>(R.id.rowClipButtons)
+                            ?.childCount == 1) return
+                    uiController.loopMainThreadForAtLeast(50)
+                }
+                throw AssertionError("Recognized recording was not shown")
+            }
+        })
+        onView(withId(R.id.tvSegDetailLabel)).check(matches(withText(R.string.segment_snore)))
+        onView(withParent(withId(R.id.rowClipButtons))).perform(scrollTo(), click())
+        onView(withParent(withId(R.id.rowClipButtons)))
+            .check(matches(withText(R.string.btn_pause)))
+        saveValidationScreenshot("validation-recognized-snore.png")
+        val exported = SessionExporter(context).exportOne(session.id).zipFile
+        files.add(exported)
+        ZipFile(exported).use { zip ->
+            val json = JSONObject(zip.getInputStream(zip.getEntry("sessions.json"))
+                .bufferedReader().readText())
+            val segments = json.getJSONArray("sessions").getJSONObject(0).getJSONArray("segments")
+            assertTrue((0 until segments.length()).any {
+                segments.getJSONObject(it).getString("primaryLabel") == "SNORE"
+            })
+            assertNotNull(zip.getEntry(clip.replaceFirst("audio_clips/", "clips/")))
+        }
     }
 
     @Test fun openPendingDetailRefreshesWithoutResettingReviewEdits() {

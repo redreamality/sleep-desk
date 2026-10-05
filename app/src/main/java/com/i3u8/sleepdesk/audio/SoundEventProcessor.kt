@@ -6,12 +6,12 @@ package com.i3u8.sleepdesk.audio
  */
 internal class SoundEventProcessor(
     private val config: AudioAlgoConfig,
-    private val modelFactory: () -> SoundModel,
+    private val modelFactory: (() -> SoundModel)? = null,
     private val writeClip: (NightEvent, CandidateAudio) -> String?,
-    private val publish: (NightEvent) -> Unit
+    private val publish: (NightEvent) -> Unit,
+    private val classifierFactory: (() -> EventSoundClassifier)? = null
 ) : AutoCloseable {
-    private var model: SoundModel? = null
-    private var classifier: SoundClassifier? = null
+    private var classifier: EventSoundClassifier? = null
     private var initializationFailure: Throwable? = null
     private var savedInSession = 0
     private var savedInHour = 0
@@ -77,9 +77,8 @@ internal class SoundEventProcessor(
             initializationFailure?.let { throw it }
             if (classifier == null) {
                 try {
-                    val loaded = modelFactory()
-                    model = loaded
-                    classifier = SoundClassifier(loaded)
+                    classifier = classifierFactory?.invoke()
+                        ?: SoundClassifier(requireNotNull(modelFactory).invoke())
                 } catch (failure: Throwable) {
                     initializationFailure = failure
                     throw failure
@@ -99,15 +98,15 @@ internal class SoundEventProcessor(
             event.copy(
                 type = NightEventType.UNKNOWN, confidence = 0f,
                 classificationStatus = ClassificationStatus.FAILED,
-                classificationReason = if (failure is InterruptedException) "analysis_cancelled"
+                classificationReason = if (failure is InterruptedException ||
+                    failure is java.util.concurrent.CancellationException) "analysis_cancelled"
                 else "model_failure:${failure.javaClass.simpleName}"
             )
         }
     }
 
     override fun close() {
-        model?.close()
-        model = null
+        classifier?.close()
         classifier = null
     }
 }

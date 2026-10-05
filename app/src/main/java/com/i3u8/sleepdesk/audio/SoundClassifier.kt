@@ -24,11 +24,16 @@ data class SoundDecision(
     val contextSpeechScore: Float? = null
 )
 
-internal class SoundClassifier(private val model: SoundModel) {
+internal interface EventSoundClassifier : AutoCloseable {
+    fun classify(candidate: CandidateAudio, eventStartMs: Long): SoundDecision
+    override fun close() = Unit
+}
+
+internal class SoundClassifier(private val model: SoundModel) : EventSoundClassifier {
     private val fusion = TemporalSoundFusion()
 
     @Synchronized
-    fun classify(candidate: CandidateAudio, eventStartMs: Long): SoundDecision {
+    override fun classify(candidate: CandidateAudio, eventStartMs: Long): SoundDecision {
         require(candidate.pcm.isNotEmpty() && candidate.clipPcm.isNotEmpty())
         val offset = candidate.startSample - candidate.clipStartSample
         require(offset in 0..candidate.clipPcm.size.toLong())
@@ -216,4 +221,6 @@ internal class SoundClassifier(private val model: SoundModel) {
             }
         }
     }
+
+    override fun close() = model.close()
 }

@@ -11,7 +11,7 @@ import kotlin.math.min
  * merge overlapping/near heterogenous bouts to MIXED → pick representative clips (strategy A).
  */
 object SegmentBuilder {
-    const val VERSION = "seg-v3"
+    const val VERSION = "seg-v4"
 
     private val SEGMENT_TYPES = setOf(
         NightEventType.SNORE.name,
@@ -157,7 +157,11 @@ object SegmentBuilder {
             val nextStart = next.minOf { it.timeMs }
             val gap = nextStart - curEnd
             val overlap = nextStart <= curEnd
-            if (overlap || gap < gapMs) {
+            // UNKNOWN is missing classification, not a competing acoustic category.
+            // Keep its review segments separate so counts cannot bury recognized sounds.
+            val currentUnknown = cur.first().effectiveType == NightEventType.UNKNOWN.name
+            val nextUnknown = next.first().effectiveType == NightEventType.UNKNOWN.name
+            if (currentUnknown == nextUnknown && (overlap || gap < gapMs)) {
                 cur.addAll(next)
             } else {
                 out.add(cur)

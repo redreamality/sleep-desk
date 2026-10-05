@@ -22,6 +22,10 @@ $sources = @(
     "$base/audio/ContextualAudioBuffer.kt"
     "$base/audio/EventDetectionPipeline.kt"
     "$base/audio/SoundClassifier.kt"
+    "$base/audio/SpectralDsp.kt"
+    "$base/audio/SpectralFeatures.kt"
+    "$base/audio/SpectralParameters.kt"
+    "$base/audio/SpectralSnoreClassifier.kt"
     "$base/audio/TemporalSoundFusion.kt"
     "$base/audio/SoundEventProcessor.kt"
     "$base/audio/BackgroundAudioQueue.kt"
@@ -41,5 +45,5 @@ $testClasses = @($tests | ForEach-Object {
     $package = [regex]::Match((Get-Content -LiteralPath $_.FullName -Raw), '(?m)^package\s+([\w.]+)').Groups[1].Value
     "$package.$($_.BaseName)"
 })
-& $java -cp "$outputJar$([IO.Path]::PathSeparator)$classpath" org.junit.runner.JUnitCore @testClasses
+& $java -cp "$outputJar$([IO.Path]::PathSeparator)$classpath$([IO.Path]::PathSeparator)$root/app/src/test/resources" org.junit.runner.JUnitCore @testClasses
 if ($LASTEXITCODE -ne 0) { throw "JUnit tests failed: $LASTEXITCODE" }

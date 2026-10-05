@@ -57,20 +57,12 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($apk)
     try {
-        $models = @($zip.Entries | Where-Object { $_.FullName -match '^assets/.*\.tflite$' })
-        if ($models.Count -eq 0) { throw 'No TFLite model assets in APK.' }
-        $hashes = foreach ($entry in $models) {
-            $stream = $entry.Open()
-            $sha = [Security.Cryptography.SHA256]::Create()
-            try { $hash = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
-            finally { $stream.Dispose(); $sha.Dispose() }
-            $source = Join-Path "$repo/app/src/main" $entry.FullName
-            if (!(Test-Path $source)) { throw "Missing source asset: $source" }
-            $sourceHash = (Get-FileHash $source -Algorithm SHA256).Hash
-            if ($hash -ne $sourceHash) { throw "Packaged model hash differs: $($entry.FullName)" }
-            [pscustomobject]@{ Asset=$entry.FullName; Bytes=$entry.Length; SHA256=$hash; SourceSHA256=$sourceHash }
-        }
-        $hashes | ConvertTo-Json -Depth 3 | Out-File "$run/model-hashes.json"
+        $prohibited = @($zip.Entries | Where-Object {
+            $_.FullName -match '\.(tflite|pcm|m4a|wav)$|tensorflow|private-analysis|audio_clips/'
+        })
+        if ($prohibited.Count -gt 0) { throw 'Model/runtime or recording leaked into spectral APK.' }
+        [pscustomobject]@{ SpectralOnly=$true; ProhibitedEntries=$prohibited.Count } |
+            ConvertTo-Json | Out-File "$run/packaging-check.json"
     } finally { $zip.Dispose() }
     $deviceList = @(& $adb devices)
     $deviceListExitCode = $LASTEXITCODE

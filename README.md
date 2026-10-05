@@ -8,8 +8,9 @@
 
 Minimal Android sleep tracker driven by the **microphone** (phone can stay on the nightstand—no mattress placement). One-tap start/stop, segment timeline, short key-event clips, local-only storage.
 
-**Development 0.4.0:** independent sound detection, real pre/post-roll, on-device YAMNet suggestions,
-and explicit uncertain/failed analysis with reviewable recordings. See [Audio v2](docs/audio-v2.md).
+**Trial 0.4.1:** independent sound detection, real pre/post-roll, a lightweight on-device
+spectral snore classifier, and explicit unresolved/failed analysis with reviewable recordings.
+The application no longer bundles YAMNet or TensorFlow Lite. See [Spectral trial](docs/audio-v2.1.md).
 This is not a clinical detector or a claim of validated classification accuracy.
 
 | | |
@@ -25,7 +26,7 @@ This is not a clinical detector or a claim of validated classification accuracy.
 
 ## What it is
 
-Sleep Desk monitors ambient night sounds through a foreground microphone service. It classifies short acoustic events (snore, cough, speech, wake-related sounds, etc.), aggregates them into **density-aware segments**, and keeps only **representative AAC clips**—never a full-night raw recording.
+Sleep Desk monitors ambient night sounds through a foreground microphone service. It suggests snore candidates, retains unresolved sounds for review, aggregates them into **density-aware segments**, and keeps only **representative AAC clips**—never a full-night raw recording. Other categories remain available for manual review and historical records; the current classifier is binary.
 
 Phone on the nightstand is enough. Secondary signals (screen / charge / light) are optional helpers, not the primary path.
 
@@ -145,7 +146,7 @@ MIT — see [LICENSE](LICENSE).
 
 ### 它是什么
 
-前台麦克风服务持续监听环境音，规则分类短时声学事件（鼾声、咳嗽、说话、夜醒相关声等），聚合成**密度感知的段（Segment）**，并只保留**代表 AAC 片段**——从不录制整晚原始音频。
+前台麦克风服务持续监听环境音，轻量频谱分类器提供鼾声候选，其他声音保留待确认，再聚合成**密度感知的段（Segment）**。其他类别仍可人工标注或查看历史记录；当前自动分类不是完整多类别识别。只保留代表 AAC 片段，从不录制整晚原始音频。见 [0.4.1 试用说明](docs/audio-v2.1.md)。
 
 手机放床头即可。屏幕/充电/光线等为辅信号，不是主路径。
 

@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
@@ -18,8 +19,12 @@ import java.util.concurrent.atomic.AtomicReference
 class YamNetSoundModelTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
+    @Before fun loadReferenceRuntimeFromTestPackage() {
+        YamNetSoundModel.loadTestRuntime()
+    }
+
     @Test fun testFrozenAssetHashAndSize() {
-        val bytes = instrumentation.targetContext.assets.open(YamNetSoundModel.MODEL_ASSET)
+        val bytes = instrumentation.context.assets.open(YamNetSoundModel.MODEL_ASSET)
             .use { it.readBytes() }
         assertEquals(YamNetSoundModel.MODEL_BYTES, bytes.size)
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -28,7 +33,7 @@ class YamNetSoundModelTest {
     }
 
     @Test fun testSilenceHas521FiniteScoresAndMatchesRawRuntimeOutputZero() {
-        val context = instrumentation.targetContext
+        val context = instrumentation.context
         val bytes = context.assets.open(YamNetSoundModel.MODEL_ASSET).use { it.readBytes() }
         val labels = context.assets.open(YamNetSoundModel.LABEL_ASSET)
             .bufferedReader().use { it.readLines() }
@@ -77,7 +82,7 @@ class YamNetSoundModelTest {
     }
 
     @Test fun testPcmScalingAndPaddingMatchDirectInferenceWithoutNormalization() {
-        val context = instrumentation.targetContext
+        val context = instrumentation.context
         val pcm = ShortArray(3200) { index ->
             when (index % 4) {
                 0 -> Short.MIN_VALUE

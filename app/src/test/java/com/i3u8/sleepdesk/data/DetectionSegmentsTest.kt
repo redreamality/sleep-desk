@@ -8,6 +8,55 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DetectionSegmentsTest {
+    @Test fun unknownNeighborsCannotHideRecognizedSnoreOrItsRecording() {
+        val events = (0..10).map { i ->
+            SleepEvent("$i", i * 1000L, i * 1000L + 500,
+                if (i == 5) "SNORE" else "UNKNOWN", -30.0,
+                clipRelativePath = "audio_clips/$i.wav",
+                classificationStatus = if (i == 5) ClassificationStatus.SUGGESTED
+                    else ClassificationStatus.UNCERTAIN)
+        }
+        val segments = SegmentBuilder.build("s", 0, 12000, events)
+        val snore = segments.singleOrNull { it.primaryLabel == "SNORE" }
+        assertNotNull("Recognized snore was swallowed by unknown neighbors", snore)
+        assertEquals(listOf("5"), snore!!.eventIds)
+        assertEquals(listOf("audio_clips/5.wav"), snore.representativeClipPaths)
+        assertEquals(events.map { it.id }.sorted(), segments.flatMap { it.eventIds }.sorted())
+        assertTrue(segments.filter { it.primaryLabel == "UNKNOWN" }
+            .all { "SNORE" !in it.labels })
+    }
+
+    @Test fun previousSegmentVersionIsRebuiltWithoutRelabelingEvents() {
+        val session = SleepSession("s", 0, 12000, mutableListOf(
+            SleepEvent("u", 0, 500, "UNKNOWN", -30.0),
+            SleepEvent("s", 1000, 1500, "SNORE", -30.0)
+        ), mutableListOf(NightSegment("old", "s", 0, 1500, "UNKNOWN",
+            eventIds = listOf("u", "s"), segmentVersion = "seg-v3")))
+        assertTrue(session.ensureSegments().any { it.primaryLabel == "SNORE" })
+        assertEquals(listOf("UNKNOWN", "SNORE"), session.events.map { it.type })
+    }
+
+    @Test fun replayOptionalPrivateExportPreservesRecognizedEvents() {
+        val path = System.getenv("SLEEP_DESK_SEGMENT_REPLAY")
+        org.junit.Assume.assumeTrue(path != null)
+        val events = java.io.File(path!!).readLines().drop(1).map { line ->
+            val columns = line.split('\t')
+            SleepEvent(columns[0], columns[1].toLong(), columns[2].toLong(),
+                columns[3], columns[4].toDouble(), columns[5].toFloat(),
+                clipRelativePath = columns[6].takeIf { it.isNotEmpty() })
+        }
+        val segments = SegmentBuilder.build("replay", events.minOf { it.timeMs },
+            events.maxOf { it.endMs }, events)
+        val snoreIds = events.filter { it.type == "SNORE" }.map { it.id }.toSet()
+        assertTrue("Replay must contain recognized snores", snoreIds.isNotEmpty())
+        val visibleSnoreIds = segments.filter { it.primaryLabel == "SNORE" }
+            .flatMap { it.eventIds }.toSet()
+        println("Private replay: ${snoreIds.size} snores; segments=" +
+            segments.groupingBy { it.primaryLabel }.eachCount())
+        assertTrue("Recognized snores hidden by segment aggregation",
+            visibleSnoreIds.containsAll(snoreIds))
+    }
+
     @Test fun manualLabelControlsCountsAndSegmentsWithoutChangingModelType() {
         val event = SleepEvent("e", 1000, 61000, "COUGH", -20.0, userLabel = "SNORE")
         val session = SleepSession("s", 0, 120000, mutableListOf(event))

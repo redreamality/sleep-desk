@@ -88,6 +88,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", manual["on"])
         self.assertNotIn("branches", manual["on"]["push"])
 
+    def test_spectral_packaging_is_checked_before_upload(self):
+        steps = self.build["steps"]
+        check = next(i for i, step in enumerate(steps)
+                     if "verify_spectral_apk.py" in step.get("run", ""))
+        upload = steps.index(self.action(self.build, "actions/upload-artifact@"))
+        self.assertLess(check, upload)
+
 
 if __name__ == "__main__":
     unittest.main()

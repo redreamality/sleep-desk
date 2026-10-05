@@ -11,8 +11,8 @@ android {
         applicationId = "com.i3u8.sleepdesk"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "0.4.0"
+        versionCode = 11
+        versionName = "0.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -75,6 +75,13 @@ android {
     androidResources {
         noCompress += "tflite"
     }
+    sourceSets {
+        // Production parameters are Kotlin constants; main/assets contains historical models only.
+        getByName("main").assets.setSrcDirs(emptyList<String>())
+        // Historical model parity remains test-only, never shipped in the application APK.
+        getByName("androidTest").assets.srcDir("src/main/assets")
+        getByName("androidTest").assets.srcDir("src/test/resources")
+    }
 }
 
 dependencies {
@@ -84,7 +91,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    implementation("org.tensorflow:tensorflow-lite:2.17.0")
+    androidTestImplementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

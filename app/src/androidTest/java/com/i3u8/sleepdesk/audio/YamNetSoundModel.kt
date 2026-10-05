@@ -1,6 +1,10 @@
 package com.i3u8.sleepdesk.audio
 
 import android.content.Context
+import androidx.test.platform.app.InstrumentationRegistry
+import android.os.Build
+import java.io.File
+import java.util.zip.ZipFile
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import java.nio.ByteBuffer
@@ -8,7 +12,7 @@ import java.nio.ByteOrder
 import java.security.MessageDigest
 
 /** Frozen CPU model, no per-clip gain normalization or learned application-specific head. */
-class YamNetSoundModel(context: Context) : SoundModel {
+class YamNetSoundModel(@Suppress("UNUSED_PARAMETER") context: Context) : SoundModel {
     override val version = "yamnet-$MODEL_SHA256-pcm16-window15600-hop7680-v1"
     private val labels: List<String>
     private val modelBuffer: ByteBuffer
@@ -19,14 +23,16 @@ class YamNetSoundModel(context: Context) : SoundModel {
 
     init {
         try {
-            labels = context.assets.open(LABEL_ASSET).bufferedReader(Charsets.UTF_8).use {
+            loadTestRuntime()
+            val assets = InstrumentationRegistry.getInstrumentation().context.assets
+            labels = assets.open(LABEL_ASSET).bufferedReader(Charsets.UTF_8).use {
                 it.readLines()
             }
             require(labels.size == CLASS_COUNT && labels.toSet().size == CLASS_COUNT &&
                 labels.none { it.isBlank() } && labels[0] == "Speech" && "Snoring" in labels) {
                 "Invalid YAMNet labels"
             }
-            val bytes = context.assets.open(MODEL_ASSET).use { it.readBytes() }
+            val bytes = assets.open(MODEL_ASSET).use { it.readBytes() }
             require(bytes.size == MODEL_BYTES) { "Unexpected YAMNet model size" }
             val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
                 .joinToString("") { "%02x".format(it.toInt() and 0xff) }
@@ -115,6 +121,28 @@ class YamNetSoundModel(context: Context) : SoundModel {
     }
 
     companion object {
+        private var nativeLoaded = false
+
+        /** Instrumentation JNI is not on the target application's native-library search path. */
+        @Synchronized
+        fun loadTestRuntime() {
+            if (nativeLoaded) return
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val directory = File(instrumentation.targetContext.codeCacheDir, "yamnet-reference")
+            check(directory.isDirectory || directory.mkdirs())
+            val library = File(directory, "libtensorflowlite_jni.so")
+            ZipFile(instrumentation.context.applicationInfo.sourceDir).use { apk ->
+                val entry = Build.SUPPORTED_ABIS.asSequence()
+                    .mapNotNull { abi -> apk.getEntry("lib/$abi/libtensorflowlite_jni.so") }
+                    .firstOrNull() ?: error("Missing reference runtime in test APK")
+                apk.getInputStream(entry).use { input ->
+                    library.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            System.load(library.absolutePath)
+            nativeLoaded = true
+        }
+
         const val MODEL_ASSET = "models/yamnet.tflite"
         const val LABEL_ASSET = "models/yamnet-labels.txt"
         const val MODEL_SHA256 = "141fba1cdaae842c816f28edc4937e8b4f0af4c8df21862ccc6b52dc567993c3"
